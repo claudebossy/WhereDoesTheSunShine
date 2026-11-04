@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
     "build": "tsc --noEmit && vite build",
+    "snapshot": "tsx server/snapshots.ts",
     "start": "tsx server/index.ts",
     "test": "tsx --test tests/*.test.ts"
   },
