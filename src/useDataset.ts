@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Dataset } from './weather';
+import { apiUrl } from './api';
 
 export function useDataset<T>(path: string, enabled: boolean, interval: number) {
   const [dataset, setDataset] = useState<Dataset<T>>();
@@ -16,7 +17,7 @@ export function useDataset<T>(path: string, enabled: boolean, interval: number) 
       setLoading(true);
       setError('');
       try {
-        const response = await fetch(path, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(210_000)]) });
+        const response = await fetch(apiUrl(path), { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(210_000)]) });
         if (!response.ok) throw new Error(`Weather service returned HTTP ${response.status}. Please retry in a minute.`);
         const result: Dataset<T> = await response.json();
         if (active) setDataset(result);

@@ -38,6 +38,22 @@ The last command serves the built app and API at http://127.0.0.1:3001.
 only `dist` on a static host does **not** provide the weather API. The server
 binds to loopback by default; use a reverse proxy for public hosting.
 
+## Publish on GitHub Pages
+
+The workflow in `.github/workflows/pages.yml` builds and deploys the frontend
+when changes are pushed to `main`. In the repository's **Settings → Pages**,
+select **GitHub Actions** as the build and deployment source. The project site
+will be published at `https://<owner>.github.io/WhereDoesTheSunShine/`.
+
+GitHub Pages hosts only static files; the weather API must run separately on a
+public Node.js host. Add a repository Actions variable named
+`VITE_API_BASE_URL` containing the API's origin (for example,
+`https://weather-api.example.com`, with no trailing slash). Configure the API
+host with `HOST=0.0.0.0` and `CORS_ORIGIN=https://<owner>.github.io` (or a
+comma-separated list of allowed site origins). Push a commit or run the
+workflow manually after setting the variable. Until the API is hosted and
+configured, weather data will be unavailable on the Pages site.
+
 ## Data sources
 
 | Data | Source | Refresh / server cache |

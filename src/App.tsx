@@ -174,7 +174,7 @@ export default function App() {
 
   return <div className="app">
     <header className="site-header">
-      <a className="brand" href="/" aria-label="Sunward home"><span className="brand-mark"><Sun size={27} strokeWidth={1.7} /></span>sunward<span className="brand-dot">.</span></a>
+      <a className="brand" href={import.meta.env.BASE_URL} aria-label="Sunward home"><span className="brand-mark"><Sun size={27} strokeWidth={1.7} /></span>sunward<span className="brand-dot">.</span></a>
       <span className="header-tagline">A brighter side of Switzerland.</span>
       <button className="sources-button" onClick={() => setShowSources(true)}><Info size={16} /><span>About the data</span><ArrowUpRight size={15} /></button>
     </header>
