@@ -7,6 +7,21 @@ import { forecastGrid, gridIndex } from './grid-service.js';
 const app = express();
 app.disable('x-powered-by');
 
+const allowedOrigins = new Set((process.env.CORS_ORIGIN ?? '').split(',').map((origin) => origin.trim()).filter(Boolean));
+app.use((request, response, next) => {
+  const origin = request.get('origin');
+  if (origin && allowedOrigins.has(origin)) {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Vary', 'Origin');
+    if (request.method === 'OPTIONS') {
+      response.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+      response.sendStatus(204);
+      return;
+    }
+  }
+  next();
+});
+
 const stations = cache(async () => parseStations(await upstream(STATIONS_URL, true)), 24 * 60 * 60_000);
 const observations = cache(async () => parseObservations(await upstream(OBSERVATIONS_URL), (await stations()).data), 2 * 60_000);
 const forecasts = cache(async () => loadForecasts((await stations()).data), 30 * 60_000);
@@ -41,4 +56,5 @@ app.use((error: unknown, _request: express.Request, response: express.Response, 
 });
 
 const port = Number(process.env.PORT || 3001);
-app.listen(port, '127.0.0.1', () => { console.log(`Sunward running at http://127.0.0.1:${port}`); });
+const host = process.env.HOST || '127.0.0.1';
+app.listen(port, host, () => { console.log(`Sunward running at http://${host}:${port}`); });
