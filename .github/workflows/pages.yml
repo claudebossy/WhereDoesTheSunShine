@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
 
 permissions:
   contents: read
@@ -12,7 +14,7 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -20,6 +22,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    timeout-minutes: 55
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,11 +33,30 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Determine Swiss history date
+        id: history-date
+        run: echo "date=$(TZ=Europe/Zurich date +%F)" >> "$GITHUB_OUTPUT"
+      - name: Restore daily history snapshot
+        id: history-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .snapshots/history.json
+          key: weather-history-v1-${{ steps.history-date.outputs.date }}
+          restore-keys: |
+            weather-history-v1-
       - name: Build site
         run: npm run build
         env:
           VITE_BASE_PATH: /${{ github.event.repository.name }}/
-          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_DATA_MODE: snapshot
+      - name: Generate weather snapshots
+        run: npm run snapshot
+      - name: Save daily history snapshot
+        if: steps.history-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .snapshots/history.json
+          key: weather-history-v1-${{ steps.history-date.outputs.date }}
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload site artifact

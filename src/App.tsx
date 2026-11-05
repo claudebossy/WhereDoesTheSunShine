@@ -6,6 +6,7 @@ import { classify, daylight, forecastHour, formatHistoryTime, formatTime, histor
 import { useDataset } from './useDataset';
 import GridLayer, { type GridPoint } from './GridLayer';
 import { gridCell, gridConditions, type ForecastGrid, type GridIndex } from './grid';
+import { snapshotMode } from './api';
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -43,7 +44,7 @@ function Sources({ close }: { close: () => void }) {
     <h3>Above the fog is not a guarantee</h3>
     <p>Neither station sunshine nor model low-cloud cover measures the fog-top altitude. A sunny high station is a candidate, not proof of a cloud inversion. Clouds, terrain shade and nighttime are different things. Check local webcams, mountain access and the official weather before travelling; this is not a mountain-safety service.</p>
     <h3>Map & availability</h3>
-    <p>Map: <a href="https://www.swisstopo.admin.ch/en/online-maps-and-data" target="_blank" rel="noreferrer">swisstopo</a>. All times are Swiss local time. Observations refresh every 5 minutes; forecasts every 30 minutes; history every 15 minutes. Stations refresh daily. Only real data are shown; unavailable services are reported, never replaced with invented weather.</p>
+    <p>Map: <a href="https://www.swisstopo.admin.ch/en/online-maps-and-data" target="_blank" rel="noreferrer">swisstopo</a>. All times are Swiss local time. {snapshotMode ? 'This site publishes hourly snapshots of observations, forecasts and stations, with history collected once per Swiss calendar day. Scheduled updates can be delayed. Today\'s history is incomplete; observations older than 40 minutes remain marked out of date. Refresh checks the latest published files, not the weather providers.' : 'Observations refresh every 5 minutes; forecasts every 30 minutes; history every 15 minutes. Stations refresh daily.'} Only real data are shown; unavailable services are reported, never replaced with invented weather.</p>
     <p className="small">Open-Meteo's public endpoint is for non-commercial use and has request limits. See the README for hosting and usage details.</p>
   </dialog>;
 }
@@ -59,7 +60,7 @@ export default function App() {
   const [showStationDots, setShowStationDots] = useState(false);
   const [gridPoint, setGridPoint] = useState<GridPoint>();
   const [requestedGridTime, setRequestedGridTime] = useState('');
-  const [historyDate, setHistoryDate] = useState(() => historyDays(Date.now())[0].date);
+  const [historyDate, setHistoryDate] = useState(() => historyDays(Date.now())[snapshotMode ? 1 : 0].date);
   const [historyTime, setHistoryTime] = useState('');
   const [now, setNow] = useState(Date.now());
   const [showSources, setShowSources] = useState(false);
@@ -168,6 +169,9 @@ export default function App() {
   const displayTimelineTime = mode === 'history' ? formatHistoryTime : formatTime;
   const unavailableHistory = mode === 'history' ? history.dataset?.data.unavailable ?? [] : [];
   const selectedCell = currentGrid && gridPoint ? gridCell(currentGrid, gridPoint.latitude, gridPoint.longitude) : undefined;
+  const snapshotDataset = areaEnabled ? nativeIndex.dataset : active.dataset;
+  const snapshotOutdated = snapshotMode && snapshotDataset
+    && now - Date.parse(snapshotDataset.fetchedAt) > (mode === 'history' ? 36 : 2) * 3_600_000;
   const cellConditions = currentGrid && selectedCell !== undefined ? gridConditions(currentGrid, selectedCell) : undefined;
   const cellStatus = classify(cellConditions, 'forecast', now);
   const selectGridPoint = (point: GridPoint) => { setGridPoint(point); setSelectedId(undefined); };
@@ -201,6 +205,12 @@ export default function App() {
         </div>
 
         {errors.length > 0 && <div className="error-banner" role="alert"><Info size={18} /><div><strong>Some weather data are unavailable.</strong> {errors.join(' ')} No demo weather is shown.</div><button onClick={refresh}>Retry</button></div>}
+        {snapshotMode && <div className="history-warning" role="status">
+          {snapshotOutdated && <strong>The published snapshot is out of date. </strong>}
+          {mode === 'history' ? 'History is collected daily; today and readings after collection may be missing.' : 'Observations and forecasts are published hourly, not live. Scheduled updates can be delayed.'}
+          {snapshotDataset && <> Snapshot collected {formatTime(snapshotDataset.fetchedAt, true)}.</>}
+          {' '}Refresh checks the latest published snapshot.
+        </div>}
         {unavailableHistory.length > 0 && <details className="history-warning">
           <summary>{unavailableHistory.length} {unavailableHistory.length === 1 ? 'station has' : 'stations have'} unavailable history. Other stations show real observations.</summary>
           <ul>{unavailableHistory.map((failure) => <li key={failure.stationId}>{stations?.find((station) => station.id === failure.stationId)?.name ?? failure.stationId}: {failure.message}</li>)}</ul>

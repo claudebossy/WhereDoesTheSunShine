@@ -36,7 +36,8 @@ npm.cmd start
 The last command serves the built app and API at http://127.0.0.1:3001.
 `PORT` overrides the server port. This is a full-stack application: deploying
 only `dist` on a static host does **not** provide the weather API. The server
-binds to loopback by default; use a reverse proxy for public hosting.
+binds to loopback by default; use a reverse proxy for public hosting. For
+static-only hosting without an API, use the snapshot workflow below.
 
 ## Publish on GitHub Pages
 
@@ -45,14 +46,42 @@ when changes are pushed to `main`. In the repository's **Settings → Pages**,
 select **GitHub Actions** as the build and deployment source. The project site
 will be published at `https://<owner>.github.io/WhereDoesTheSunShine/`.
 
-GitHub Pages hosts only static files; the weather API must run separately on a
-public Node.js host. Add a repository Actions variable named
-`VITE_API_BASE_URL` containing the API's origin (for example,
-`https://weather-api.example.com`, with no trailing slash). Configure the API
-host with `HOST=0.0.0.0` and `CORS_ORIGIN=https://<owner>.github.io` (or a
-comma-separated list of allowed site origins). Push a commit or run the
-workflow manually after setting the variable. Until the API is hosted and
-configured, weather data will be unavailable on the Pages site.
+**No separate API host is required for Pages.** The workflow runs hourly at
+17 minutes past the hour, and also on pushes and manual runs. It fetches real
+station metadata, latest observations and station forecasts, and precomputes
+every current/future complete area-forecast hour in one native model run.
+`npm run snapshot` writes these datasets under `dist/weather/` after the build.
+The Pages build uses `VITE_DATA_MODE=snapshot` to read project-relative JSON
+files instead of `/api` endpoints. `VITE_API_BASE_URL` is not used in this mode.
+
+History is collected once per **Swiss calendar day**, on the first successful
+run that day, and reused through the Actions cache. Cache eviction can cause an
+extra collection. Yesterday is the default history date on Pages; today's
+history and any measurements published after collection remain incomplete until
+the next daily collection. Missing values are never filled with forecasts.
+Station-specific history failures remain visible in the app.
+
+Actions schedules can be delayed, and scheduled workflows only run on the
+default branch. For public repositories, GitHub can disable schedules after
+60 days without repository activity. Snapshot collection timestamps are shown;
+observations retain their real measurement timestamps and the 40-minute stale
+threshold, so hourly observations will sometimes be marked out of date.
+Forecast/observation snapshots older than two hours and history snapshots older
+than 36 hours display an additional warning. Refresh only reloads published
+files; it does not fetch new provider data.
+
+Each deployment includes all advertised grid files before publishing. A failed
+collection fails the workflow and leaves the previous deployed site intact,
+whose timestamps and stale warnings remain visible. Precomputing the area
+forecast downloads substantially more data than viewing a single hour; monitor
+Actions runtime and Pages artifact limits. It retains the existing ~1 km
+display grid rather than inventing station-interpolated area data.
+
+Local development and `npm start` still use the on-demand Node API. To host
+the frontend separately in API mode, build without `VITE_DATA_MODE=snapshot`,
+set `VITE_API_BASE_URL` to the API's HTTPS origin (no trailing slash), and
+configure the API host with `HOST=0.0.0.0` and
+`CORS_ORIGIN=https://<owner>.github.io`.
 
 ## Data sources
 
