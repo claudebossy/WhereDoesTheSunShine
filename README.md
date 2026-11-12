@@ -12,6 +12,8 @@ as reference locations, or switch off **Area forecast** for the original
 **Look back** shows measured hourly sunshine and mean temperature for **Today,
 Yesterday or 2 days ago**, with an hourly slider. Dates and times are Swiss local
 time; the history timestamp is the **end** of the measured hour.
+On mobile, the hour slider, forecast layer controls and legend sit directly
+below the map to keep it unobstructed; desktop retains the on-map controls.
 
 ## Run locally
 

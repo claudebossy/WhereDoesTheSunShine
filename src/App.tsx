@@ -272,35 +272,39 @@ export default function App() {
           </aside>
 
           <div className="map-area">
-            <MapContainer ref={mapRef} center={[46.8, 8.2]} zoom={7} minZoom={6} maxZoom={17} className="swiss-map" scrollWheelZoom={true} aria-label="Interactive Swiss sunshine map">
-              <TileLayer url="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg" bounds={[[45.7, 5.9], [47.9, 10.6]]} attribution='Map &copy; <a href="https://www.swisstopo.admin.ch/">swisstopo</a>' eventHandlers={{ tileerror: () => setTileError(true) }} />
-              <MapFocus station={selected} reset={mapReset} />
-              {areaEnabled && <GridLayer grid={currentGrid} minimumElevation={minElevation} sunnyOnly={sunnyOnly} selected={gridPoint} onSelect={selectGridPoint} />}
-              {filtered.filter(({ station }) => !areaEnabled || showStationDots || station.id === selectedId).map(({ station, conditions, status }) => <CircleMarker key={station.id} center={[station.latitude, station.longitude]} radius={selectedId === station.id ? 11 : status === 'sunny' ? 8 : 6} bubblingMouseEvents={false} pathOptions={{ color: selectedId === station.id ? '#293d32' : '#fff', weight: selectedId === station.id ? 3 : 2, fillColor: STATUS[status].color, fillOpacity: 0.95 }} eventHandlers={{ click: () => { setSelectedId(station.id); setGridPoint(undefined); } }}>
-                <Popup><div className="map-popup"><strong>{station.name}</strong><span>{metres(station.elevation)} · {station.canton}</span><b style={{ color: STATUS[status].color }}>{STATUS[status].label}</b>{conditions && <span>{mode === 'history' ? `Hour ending ${formatHistoryTime(conditions.time, true)}` : formatTime(conditions.time, true)}</span>}</div></Popup>
-              </CircleMarker>)}
-            </MapContainer>
-            <div className="map-top-label">{mode === 'history' ? <History size={12} /> : <span className="live-dot" />}<span>{areaEnabled ? 'ICON-CH1 AREA FORECAST · 1.1 KM' : `${mode === 'history' ? 'PAST OBSERVATIONS' : mode === 'observations' ? 'REAL OBSERVATIONS' : 'HOURLY FORECAST'} · ${filtered.length} ${filtered.length === 1 ? 'STATION' : 'STATIONS'}`}</span></div>
-            <button className="map-reset" aria-label="Show all of Switzerland" onClick={() => { setSelectedId(undefined); setGridPoint(undefined); setMapReset((value) => value + 1); }}><Compass size={20} /></button>
-            {mode === 'forecast' && <div className="layer-controls">
-              <label><input type="checkbox" checked={areaForecast} onChange={(event) => setAreaForecast(event.target.checked)} />Area forecast</label>
-              {areaEnabled && <label><input type="checkbox" checked={showStationDots} onChange={(event) => setShowStationDots(event.target.checked)} />Station forecast dots</label>}
-              {areaEnabled && <button disabled={!currentGrid} onClick={() => { const centre = mapRef.current?.getCenter(); if (centre) selectGridPoint({ latitude: centre.lat, longitude: centre.lng }); }}><MapPin size={13} />Inspect map centre</button>}
-            </div>}
-            {gridLoading && <div className="grid-loading" role="status"><RefreshCw size={15} className="grid-spinner" />Loading the native forecast grid...</div>}
-            {noNativeHours && <div className="tile-error" role="alert">No future hours are available in this native run. Refresh, or switch off Area forecast for the station timeline.</div>}
-            {tileError && <div className="tile-error" role="alert">Some swisstopo map tiles could not load. Weather markers are still available. Reload to retry.</div>}
-            <div className="map-bottom">
-              <div className="legend"><span><i style={{ background: STATUS.sunny.color }} />Sunshine</span><span><i style={{ background: STATUS.mixed.color }} />Some sunshine</span><span><i style={{ background: STATUS['no-sun'].color }} />{mode === 'forecast' ? 'Cloud / low cloud risk' : 'No sunshine'}</span><span><i style={{ background: STATUS.night.color }} />Night</span><span><i style={{ background: STATUS.unknown.color }} />{mode === 'observations' ? 'Missing / stale' : 'Missing data'}</span></div>
-              <div className="time-panel">
-                {mode === 'observations' ? <><div className="time-panel-icon"><MapPin size={21} /></div><div><strong>The view, right now.</strong><p>Measured sunshine in the last 10-minute period.</p></div><span className="time-live"><span className="live-dot" />{active.dataset ? 'OBSERVATIONS' : 'CONNECTING'}</span></> : <div className="forecast-timeline">
-                  {mode === 'history' && <div className="history-days" aria-label="Historical day">{days.map((day) => <button key={day.date} aria-label={`${day.label}, ${day.date}`} aria-pressed={day.date === historyDate} className={day.date === historyDate ? 'active' : ''} onClick={() => setHistoryDate(day.date)}>{day.label}</button>)}</div>}
-                  <div className="timeline-title"><div><span className="eyebrow">{mode === 'history' ? 'MEASURED HOUR ENDING' : areaEnabled ? 'FORECAST HOUR ENDING' : 'PICK YOUR MOMENT'}</span><strong>{timelineTime ? displayTimelineTime(timelineTime, true) : mode === 'history' ? 'No completed hours yet' : noNativeHours ? 'No native hours available' : 'Loading forecast...'}</strong></div><span className="forecast-label">{mode === 'history' ? 'Hourly observations' : areaEnabled ? 'Native model hours' : 'Next 48 hours'}</span></div>
-                  <input type="range" aria-label={mode === 'history' ? 'Historical hour' : 'Forecast hour'} min="0" max={Math.max(0, timelineTimes.length - 1)} value={mode === 'history' ? pastHourIndex : currentHourIndex} disabled={!timelineTimes.length || (!areaEnabled && !active.dataset)} onChange={(event) => { const value = timelineTimes[Number(event.target.value)]; if (mode === 'history') setHistoryTime(value); else setTime(value); }} />
-                  <div className="range-labels"><span>{timelineTimes[0] && displayTimelineTime(timelineTimes[0], true)}</span><span>{timelineTimes.at(-1) && displayTimelineTime(timelineTimes.at(-1)!, true)}</span></div>
-                  {mode === 'history' && <p className="history-caption">Sunshine total and mean temperature for the preceding hour. Publication may lag.</p>}
-                  {areaEnabled && <p className="grid-caption">Source: MeteoSwiss · ICON-CH1 control · nearest-cell shading. Click an area for details. No fog-top altitude is inferred.</p>}
-                </div>}
+            <div className="map-viewport">
+              <MapContainer ref={mapRef} center={[46.8, 8.2]} zoom={7} minZoom={6} maxZoom={17} className="swiss-map" scrollWheelZoom={true} aria-label="Interactive Swiss sunshine map">
+                <TileLayer url="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg" bounds={[[45.7, 5.9], [47.9, 10.6]]} attribution='Map &copy; <a href="https://www.swisstopo.admin.ch/">swisstopo</a>' eventHandlers={{ tileerror: () => setTileError(true) }} />
+                <MapFocus station={selected} reset={mapReset} />
+                {areaEnabled && <GridLayer grid={currentGrid} minimumElevation={minElevation} sunnyOnly={sunnyOnly} selected={gridPoint} onSelect={selectGridPoint} />}
+                {filtered.filter(({ station }) => !areaEnabled || showStationDots || station.id === selectedId).map(({ station, conditions, status }) => <CircleMarker key={station.id} center={[station.latitude, station.longitude]} radius={selectedId === station.id ? 11 : status === 'sunny' ? 8 : 6} bubblingMouseEvents={false} pathOptions={{ color: selectedId === station.id ? '#293d32' : '#fff', weight: selectedId === station.id ? 3 : 2, fillColor: STATUS[status].color, fillOpacity: 0.95 }} eventHandlers={{ click: () => { setSelectedId(station.id); setGridPoint(undefined); } }}>
+                  <Popup><div className="map-popup"><strong>{station.name}</strong><span>{metres(station.elevation)} · {station.canton}</span><b style={{ color: STATUS[status].color }}>{STATUS[status].label}</b>{conditions && <span>{mode === 'history' ? `Hour ending ${formatHistoryTime(conditions.time, true)}` : formatTime(conditions.time, true)}</span>}</div></Popup>
+                </CircleMarker>)}
+              </MapContainer>
+              <div className="map-top-label">{mode === 'history' ? <History size={12} /> : <span className="live-dot" />}<span>{areaEnabled ? 'ICON-CH1 AREA FORECAST · 1.1 KM' : `${mode === 'history' ? 'PAST OBSERVATIONS' : mode === 'observations' ? 'REAL OBSERVATIONS' : 'HOURLY FORECAST'} · ${filtered.length} ${filtered.length === 1 ? 'STATION' : 'STATIONS'}`}</span></div>
+              <button className="map-reset" aria-label="Show all of Switzerland" onClick={() => { setSelectedId(undefined); setGridPoint(undefined); setMapReset((value) => value + 1); }}><Compass size={20} /></button>
+              {gridLoading && <div className="grid-loading" role="status"><RefreshCw size={15} className="grid-spinner" />Loading the native forecast grid...</div>}
+              {noNativeHours && <div className="tile-error" role="alert">No future hours are available in this native run. Refresh, or switch off Area forecast for the station timeline.</div>}
+              {tileError && <div className="tile-error" role="alert">Some swisstopo map tiles could not load. Weather markers are still available. Reload to retry.</div>}
+            </div>
+            <div className="map-controls">
+              {mode === 'forecast' && <div className="layer-controls">
+                <label><input type="checkbox" checked={areaForecast} onChange={(event) => setAreaForecast(event.target.checked)} />Area forecast</label>
+                {areaEnabled && <label><input type="checkbox" checked={showStationDots} onChange={(event) => setShowStationDots(event.target.checked)} />Station forecast dots</label>}
+                {areaEnabled && <button disabled={!currentGrid} onClick={() => { const centre = mapRef.current?.getCenter(); if (centre) selectGridPoint({ latitude: centre.lat, longitude: centre.lng }); }}><MapPin size={13} />Inspect map centre</button>}
+              </div>}
+              <div className="map-bottom">
+                <div className="legend"><span><i style={{ background: STATUS.sunny.color }} />Sunshine</span><span><i style={{ background: STATUS.mixed.color }} />Some sunshine</span><span><i style={{ background: STATUS['no-sun'].color }} />{mode === 'forecast' ? 'Cloud / low cloud risk' : 'No sunshine'}</span><span><i style={{ background: STATUS.night.color }} />Night</span><span><i style={{ background: STATUS.unknown.color }} />{mode === 'observations' ? 'Missing / stale' : 'Missing data'}</span></div>
+                <div className="time-panel">
+                  {mode === 'observations' ? <><div className="time-panel-icon"><MapPin size={21} /></div><div><strong>The view, right now.</strong><p>Measured sunshine in the last 10-minute period.</p></div><span className="time-live"><span className="live-dot" />{active.dataset ? 'OBSERVATIONS' : 'CONNECTING'}</span></> : <div className="forecast-timeline">
+                    {mode === 'history' && <div className="history-days" aria-label="Historical day">{days.map((day) => <button key={day.date} aria-label={`${day.label}, ${day.date}`} aria-pressed={day.date === historyDate} className={day.date === historyDate ? 'active' : ''} onClick={() => setHistoryDate(day.date)}>{day.label}</button>)}</div>}
+                    <div className="timeline-title"><div><span className="eyebrow">{mode === 'history' ? 'MEASURED HOUR ENDING' : areaEnabled ? 'FORECAST HOUR ENDING' : 'PICK YOUR MOMENT'}</span><strong>{timelineTime ? displayTimelineTime(timelineTime, true) : mode === 'history' ? 'No completed hours yet' : noNativeHours ? 'No native hours available' : 'Loading forecast...'}</strong></div><span className="forecast-label">{mode === 'history' ? 'Hourly observations' : areaEnabled ? 'Native model hours' : 'Next 48 hours'}</span></div>
+                    <input type="range" aria-label={mode === 'history' ? 'Historical hour' : 'Forecast hour'} min="0" max={Math.max(0, timelineTimes.length - 1)} value={mode === 'history' ? pastHourIndex : currentHourIndex} disabled={!timelineTimes.length || (!areaEnabled && !active.dataset)} onChange={(event) => { const value = timelineTimes[Number(event.target.value)]; if (mode === 'history') setHistoryTime(value); else setTime(value); }} />
+                    <div className="range-labels"><span>{timelineTimes[0] && displayTimelineTime(timelineTimes[0], true)}</span><span>{timelineTimes.at(-1) && displayTimelineTime(timelineTimes.at(-1)!, true)}</span></div>
+                    {mode === 'history' && <p className="history-caption">Sunshine total and mean temperature for the preceding hour. Publication may lag.</p>}
+                    {areaEnabled && <p className="grid-caption">Source: MeteoSwiss · ICON-CH1 control · nearest-cell shading. Click an area for details. No fog-top altitude is inferred.</p>}
+                  </div>}
+                </div>
               </div>
             </div>
           </div>
