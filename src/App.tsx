@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap } from 'react-leaflet';
+import { Circle, CircleMarker, MapContainer, Pane, Popup, TileLayer, useMap } from 'react-leaflet';
 import type { Map as LeafletMap } from 'leaflet';
 import { ArrowDown, ArrowUpRight, ChevronRight, Cloud, Compass, History, Info, MapPin, Moon, Mountain, RefreshCw, Search, SlidersHorizontal, Sun, X } from 'lucide-react';
 import { classify, daylight, forecastHour, formatHistoryTime, formatTime, historicalTimes, historyDays, hourAtTime, metres, STATUS, type Conditions, type Forecast, type Mode, type ObservationHistory, type Station, type Status } from './weather';
@@ -7,6 +7,7 @@ import { useDataset } from './useDataset';
 import GridLayer, { type GridPoint } from './GridLayer';
 import { gridCell, gridConditions, type ForecastGrid, type GridIndex } from './grid';
 import { snapshotMode } from './api';
+import { stationAreas, STATION_AREA_RADIUS_METRES } from './stationAreas';
 
 const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -38,7 +39,9 @@ function Sources({ close }: { close: () => void }) {
     <p>Source: MeteoSwiss ICON-CH1, delivered through <a href="https://open-meteo.com/en/docs/meteoswiss-api" target="_blank" rel="noreferrer">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>). Sunshine means at least 45 minutes per hour, with at most 25% low cloud and 40% total cloud. Low cloud risk means at least 60% low cloud and at most 2 minutes of sunshine. These are our screening thresholds, not official MeteoSwiss categories. The forecast can differ from conditions at a summit.</p>
     <h3>Continuous area forecast</h3>
     <p>Source: <a href="https://opendatadocs.meteoswiss.ch/e-forecast-data/e2-e3-numerical-weather-forecasting-model" target="_blank" rel="noreferrer">MeteoSwiss ICON-CH1 Open Government Data</a>, decoded directly from the control-run GRIB files. Its native resolution is approximately 1.1 km. The coloured layer samples the nearest native model cell onto roughly 1 km display pixels; it does not interpolate station observations. It covers Switzerland and nearby areas. The same forecast sunshine and cloud thresholds apply. Each area timestamp ends the forecast hour, and sunshine is the difference between that run's accumulated sunshine at consecutive hours.</p>
-    <p>The area timeline uses only complete hours available in one 33-hour model run. Switch off <strong>Area forecast</strong> for the original 48-hour station timeline. Station cards and optional station dots use Open-Meteo forecasts and can use a different model run from the area layer. They are not measured evidence for a future hour; use Measured now or Look back for observations. Grid temperature and altitude describe the model, not a precise summit. Raw model files are retained by MeteoSwiss for 24 hours, so no historical area layer is invented for the two-day observation history.</p>
+    <p>The area timeline uses only complete hours available in one 33-hour model run. Switch off <strong>Area forecast</strong> for the original 48-hour station timeline. Station cards and optional station dots use Open-Meteo forecasts and can use a different model run from the area layer. They are not measured evidence for a future hour; use Measured now or Look back for observations. Grid temperature and altitude describe the model, not a precise summit. Raw model files are retained by MeteoSwiss for 24 hours, so no historical model layer is invented for the two-day observation history.</p>
+    <h3>Station-based area estimates</h3>
+    <p>Measured now and Look back can shade illustrative 5 km circles around stations using their measured sunshine category. These are station-based estimates, not continuous measured coverage or interpolation. The radius is a display choice, not a validated distance over which conditions are representative. Overlapping circles can show different readings; unshaded areas have no area estimate. Missing sunshine and stale live readings are not shaded. The history slider uses only the selected measured hour. Filters apply to the source station's altitude and name, not the surrounding terrain. Station dots remain visible for exact readings. Local clouds, altitude and terrain shade can differ within each circle.</p>
     <h3>Looking back</h3>
     <p>Source: MeteoSwiss Open Government Data, using the official hourly station files. Today, yesterday and two days ago are Swiss calendar dates. Each timestamp is the <strong>end of the measured hour</strong>; sunshine is the total for that hour, and temperature is the hourly mean. Sunshine means at least 48 minutes per hour (the same 80% threshold as live observations). More than 0 but less than 48 minutes means some sunshine. These are observations, not archived forecasts. Missing readings stay missing; publication of today's hourly values can lag. Historical readings are not flagged as stale just because they are in the past.</p>
     <h3>Above the fog is not a guarantee</h3>
@@ -57,6 +60,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string>();
   const [time, setTime] = useState('');
   const [areaForecast, setAreaForecast] = useState(true);
+  const [observationAreas, setObservationAreas] = useState(true);
   const [showStationDots, setShowStationDots] = useState(false);
   const [gridPoint, setGridPoint] = useState<GridPoint>();
   const [requestedGridTime, setRequestedGridTime] = useState('');
@@ -74,6 +78,7 @@ export default function App() {
   const forecasts = useDataset<Record<string, Forecast>>('/api/forecasts', mode === 'forecast', 30 * 60_000);
   const history = useDataset<ObservationHistory>('/api/history', mode === 'history', 15 * 60_000);
   const areaEnabled = mode === 'forecast' && areaForecast;
+  const observationAreasEnabled = mode !== 'forecast' && observationAreas;
   const nativeIndex = useDataset<GridIndex>('/api/grid-index', areaEnabled, 15 * 60_000);
   const modelRun = nativeIndex.dataset?.data.referenceTime ?? '';
   useEffect(() => {
@@ -141,6 +146,7 @@ export default function App() {
   const filtered = ranked.filter(({ station, status }) => station.elevation >= minElevation
     && (!sunnyOnly || status === 'sunny')
     && normalize(`${station.name} ${station.canton} ${station.id}`).includes(normalize(search)));
+  const shadedStations = observationAreasEnabled ? stationAreas(filtered) : [];
   const selected = stations?.find((station) => station.id === selectedId);
   const selectedConditions = selected && conditionsFor(selected.id);
   const selectedStatus = classify(selectedConditions, mode, now);
@@ -255,6 +261,7 @@ export default function App() {
               {mode === 'history' && !selectedConditions && historyTime && <p className="small">No measurement for the hour ending {formatHistoryTime(historyTime, true)}. It may be missing or not yet published.</p>}
               {mode === 'forecast' && forecasts.dataset?.data[selected.id] && <p className="small">Forecast elevation: {metres(forecasts.dataset.data[selected.id].modelElevation)}. Low cloud cover is not a fog-top measurement.</p>}
               {areaEnabled && <p className="small">Station forecast via Open-Meteo; its model run can differ from the native area layer.</p>}
+              {observationAreasEnabled && <p className="small">Nearby shading is a station-based estimate within an illustrative 5 km radius, not measured area coverage.</p>}
               <a className="station-link" href={`https://map.geo.admin.ch/?lang=en&topic=ech&bgLayer=ch.swisstopo.pixelkarte-farbe&swisssearch=${encodeURIComponent(selected.name)}`} target="_blank" rel="noreferrer">Explore on the Swiss map <ArrowUpRight size={14} /></a>
             </section>}
 
@@ -277,11 +284,14 @@ export default function App() {
                 <TileLayer url="https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.pixelkarte-farbe/default/current/3857/{z}/{x}/{y}.jpeg" bounds={[[45.7, 5.9], [47.9, 10.6]]} attribution='Map &copy; <a href="https://www.swisstopo.admin.ch/">swisstopo</a>' eventHandlers={{ tileerror: () => setTileError(true) }} />
                 <MapFocus station={selected} reset={mapReset} />
                 {areaEnabled && <GridLayer grid={currentGrid} minimumElevation={minElevation} sunnyOnly={sunnyOnly} selected={gridPoint} onSelect={selectGridPoint} />}
+                {observationAreasEnabled && <Pane name="station-area-estimates" style={{ zIndex: 350, pointerEvents: 'none' }}>
+                  {shadedStations.map(({ station, status }) => <Circle key={station.id} center={[station.latitude, station.longitude]} radius={STATION_AREA_RADIUS_METRES} interactive={false} pathOptions={{ color: STATUS[status].color, weight: 1, dashArray: '4 4', opacity: 0.6, fillColor: STATUS[status].color, fillOpacity: 0.2 }} />)}
+                </Pane>}
                 {filtered.filter(({ station }) => !areaEnabled || showStationDots || station.id === selectedId).map(({ station, conditions, status }) => <CircleMarker key={station.id} center={[station.latitude, station.longitude]} radius={selectedId === station.id ? 11 : status === 'sunny' ? 8 : 6} bubblingMouseEvents={false} pathOptions={{ color: selectedId === station.id ? '#293d32' : '#fff', weight: selectedId === station.id ? 3 : 2, fillColor: STATUS[status].color, fillOpacity: 0.95 }} eventHandlers={{ click: () => { setSelectedId(station.id); setGridPoint(undefined); } }}>
                   <Popup><div className="map-popup"><strong>{station.name}</strong><span>{metres(station.elevation)} · {station.canton}</span><b style={{ color: STATUS[status].color }}>{STATUS[status].label}</b>{conditions && <span>{mode === 'history' ? `Hour ending ${formatHistoryTime(conditions.time, true)}` : formatTime(conditions.time, true)}</span>}</div></Popup>
                 </CircleMarker>)}
               </MapContainer>
-              <div className="map-top-label">{mode === 'history' ? <History size={12} /> : <span className="live-dot" />}<span>{areaEnabled ? 'ICON-CH1 AREA FORECAST · 1.1 KM' : `${mode === 'history' ? 'PAST OBSERVATIONS' : mode === 'observations' ? 'REAL OBSERVATIONS' : 'HOURLY FORECAST'} · ${filtered.length} ${filtered.length === 1 ? 'STATION' : 'STATIONS'}`}</span></div>
+              <div className="map-top-label">{mode === 'history' ? <History size={12} /> : <span className="live-dot" />}<span>{areaEnabled ? 'ICON-CH1 AREA FORECAST · 1.1 KM' : `${mode === 'history' ? 'PAST OBSERVATIONS' : mode === 'observations' ? 'REAL OBSERVATIONS' : 'HOURLY FORECAST'} · ${observationAreasEnabled ? 'STATION-BASED AREA ESTIMATES' : `${filtered.length} ${filtered.length === 1 ? 'STATION' : 'STATIONS'}`}`}</span></div>
               <button className="map-reset" aria-label="Show all of Switzerland" onClick={() => { setSelectedId(undefined); setGridPoint(undefined); setMapReset((value) => value + 1); }}><Compass size={20} /></button>
               {gridLoading && <div className="grid-loading" role="status"><RefreshCw size={15} className="grid-spinner" />Loading the native forecast grid...</div>}
               {noNativeHours && <div className="tile-error" role="alert">No future hours are available in this native run. Refresh, or switch off Area forecast for the station timeline.</div>}
@@ -293,7 +303,11 @@ export default function App() {
                 {areaEnabled && <label><input type="checkbox" checked={showStationDots} onChange={(event) => setShowStationDots(event.target.checked)} />Station forecast dots</label>}
                 {areaEnabled && <button disabled={!currentGrid} onClick={() => { const centre = mapRef.current?.getCenter(); if (centre) selectGridPoint({ latitude: centre.lat, longitude: centre.lng }); }}><MapPin size={13} />Inspect map centre</button>}
               </div>}
+              {mode !== 'forecast' && <div className="layer-controls">
+                <label><input type="checkbox" checked={observationAreas} onChange={(event) => setObservationAreas(event.target.checked)} />Station-based area estimates</label>
+              </div>}
               <div className="map-bottom">
+                {observationAreasEnabled && <div className="observation-area-note" role="note">Shading: illustrative 5 km station-based estimates, not measured coverage. Missing or stale readings are unshaded; altitude filters use station altitude. Select a station dot for its reading.</div>}
                 <div className="legend"><span><i style={{ background: STATUS.sunny.color }} />Sunshine</span><span><i style={{ background: STATUS.mixed.color }} />Some sunshine</span><span><i style={{ background: STATUS['no-sun'].color }} />{mode === 'forecast' ? 'Cloud / low cloud risk' : 'No sunshine'}</span><span><i style={{ background: STATUS.night.color }} />Night</span><span><i style={{ background: STATUS.unknown.color }} />{mode === 'observations' ? 'Missing / stale' : 'Missing data'}</span></div>
                 <div className="time-panel">
                   {mode === 'observations' ? <><div className="time-panel-icon"><MapPin size={21} /></div><div><strong>The view, right now.</strong><p>Measured sunshine in the last 10-minute period.</p></div><span className="time-live"><span className="live-dot" />{active.dataset ? 'OBSERVATIONS' : 'CONNECTING'}</span></> : <div className="forecast-timeline">

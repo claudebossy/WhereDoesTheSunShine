@@ -12,6 +12,16 @@ as reference locations, or switch off **Area forecast** for the original
 **Look back** shows measured hourly sunshine and mean temperature for **Today,
 Yesterday or 2 days ago**, with an hourly slider. Dates and times are Swiss local
 time; the history timestamp is the **end** of the measured hour.
+**Measured now** and **Look back** default to optional **station-based area
+estimates**: lightly shaded, dashed 5 km circles carrying each station's measured
+sunshine category. Station dots remain visible for exact readings. The radius is
+illustrative, not a validated coverage distance; this is not a continuous measured
+grid or interpolation. Local terrain, altitude and cloud can differ within a
+circle, and overlapping circles may show different readings. Missing sunshine
+and stale live readings are unshaded. The history slider and station search,
+altitude and sunshine filters also update the circles; altitude refers to the
+source station, not surrounding terrain. Unshaded areas have no area estimate.
+Switch off **Station-based area estimates** to return to dots only.
 On mobile, the hour slider, forecast layer controls and legend sit directly
 below the map to keep it unobstructed; desktop retains the on-map controls.
 
@@ -153,8 +163,9 @@ a **33-hour horizon**. The area timeline shows only complete available hourly
 fields in one run, never a silent switch to a coarser model for later hours.
 Its displayed run timestamp can differ from the Open-Meteo station forecasts.
 The counters and station cards still refer to station forecast locations, not
-the count of shaded pixels. Measured now and Look back remain station
-observations; no synthetic historical area forecast is drawn.
+the count of shaded pixels. Measured now and Look back use station observations
+with optional, explicitly labelled nearby-area estimates; no synthetic historical
+area forecast is drawn.
 
 `server/native-grid.ts` discovers the latest completed control run through the
 government STAC API, checks the parameter catalogue units and decodes GRIB2
